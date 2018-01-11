@@ -16,9 +16,21 @@ from basic.trainer import MultiGPUTrainer
 from basic.read_data import read_data, get_squad_data_filter, update_config
 from my.tensorflow import get_num_params
 
+import logging
+
+logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(message)s')
 
 def main(config):
     set_dirs(config)
+    # load config file
+    if os.path.exists(os.path.join(config.log_dir, "config.json")):
+        print("Loading config file.")
+        with open(os.path.join(config.log_dir, "config.json"), 'r') as file:
+            config.update(**json.load(file))
+    else:
+        print("Saving config file.")
+        with open(os.path.join(config.log_dir, "config.json"), 'w') as file:
+            json.dump(config.__flags, file)
     with tf.device(config.device):
         if config.mode == 'train':
             _train(config)
@@ -40,6 +52,7 @@ def set_dirs(config):
     config.log_dir = os.path.join(config.out_dir, "log")
     config.eval_dir = os.path.join(config.out_dir, "eval")
     config.answer_dir = os.path.join(config.out_dir, "answer")
+    config.tensorboard_dir = os.path.join(config.out_dir, "tensorboard")
     if not os.path.exists(config.out_dir):
         os.makedirs(config.out_dir)
     if not os.path.exists(config.save_dir):
@@ -50,6 +63,8 @@ def set_dirs(config):
         os.mkdir(config.answer_dir)
     if not os.path.exists(config.eval_dir):
         os.mkdir(config.eval_dir)
+    if not os.path.exists(config.tensorboard_dir):
+        os.mkdir(config.tensorboard_dir)
 
 
 def _config_debug(config):
@@ -88,14 +103,29 @@ def _train(config):
     graph_handler = GraphHandler(config, model)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables
-    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+    gpu_config = tf.ConfigProto()
+    gpu_config.allow_soft_placement = True
+    if config.gpu_usage < 1.0:
+        gpu_config.gpu_options.per_process_gpu_memory_fraction = config.gpu_usage
+    sess = tf.Session(config=gpu_config)
     graph_handler.initialize(sess)
 
+    file_handler = logging.FileHandler(os.path.join(config.log_dir, "log.txt"))
+    logging.getLogger().addHandler(file_handler)
+
+    statistics = {"step": [], "train": {"loss": [], "EM": [], "F1": []}, "dev": {"loss": [], "EM": [], "F1": []},
+                  "test": {"loss": [], "EM": [], "F1": []}}
+
+    if os.path.exists(os.path.join(config.log_dir, "statistics.json")):
+        with open(os.path.join(config.log_dir, "statistics.json"), 'r') as file:
+            statistics = json.load(file)
     # Begin training
     num_steps = config.num_steps or int(math.ceil(train_data.num_examples / (config.batch_size * config.num_gpus))) * config.num_epochs
-    global_step = 0
-    for batches in tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus,
-                                                     num_steps=num_steps, shuffle=True, cluster=config.cluster), total=num_steps):
+    global_step = sess.run(model.global_step)
+    for step, batches in enumerate(tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus,
+                                                     num_steps=num_steps, shuffle=True, cluster=config.cluster), total=num_steps)):
+        if step <= global_step:
+            continue
         global_step = sess.run(model.global_step) + 1  # +1 because all calculations are done after step
         get_summary = global_step % config.log_period == 0
         loss, summary, train_op = trainer.step(sess, batches, get_summary=get_summary)
@@ -116,9 +146,24 @@ def _train(config):
             e_train = evaluator.get_evaluation_from_batches(
                 sess, tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus, num_steps=num_steps), total=num_steps)
             )
+            tqdm.write('\n')
+            logging.info(str(e_train))
             graph_handler.add_summaries(e_train.summaries, global_step)
             e_dev = evaluator.get_evaluation_from_batches(
                 sess, tqdm(dev_data.get_multi_batches(config.batch_size, config.num_gpus, num_steps=num_steps), total=num_steps))
+            tqdm.write('\n')
+            logging.info(str(e_dev))
+
+            statistics['step'].append(int(global_step))
+            statistics['train']['loss'].append(e_train.loss)
+            statistics['train']['EM'].append(e_train.acc)
+            statistics['train']['F1'].append(e_train.f1)
+            statistics['dev']['loss'].append(e_dev.loss)
+            statistics['dev']['EM'].append(e_dev.acc)
+            statistics['dev']['F1'].append(e_dev.f1)
+
+            with open(os.path.join(config.log_dir, "statistics.json"), 'w') as file:
+                json.dump(statistics, file)
             graph_handler.add_summaries(e_dev.summaries, global_step)
 
             if config.dump_eval:

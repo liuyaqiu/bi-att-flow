@@ -9,7 +9,15 @@ class Trainer(object):
         assert isinstance(model, Model)
         self.config = config
         self.model = model
-        self.opt = tf.train.AdamOptimizer(config.init_lr)
+        if config.optimizer == "Adam":
+            optimizer = tf.train.AdamOptimizer
+        elif config.optimizer == "SGD":
+            optimizer = tf.train.GradientDescentOptimizer
+        elif config.optimizer == "Adadelta":
+            optimizer = tf.train.AdadeltaOptimizer
+        else:
+            raise ValueError("Invalid value of optimizer: {}".format(config.optimizer))
+        self.opt = optimizer(config.init_lr)
         self.loss = model.get_loss()
         self.var_list = model.get_var_list()
         self.global_step = model.get_global_step()
@@ -39,7 +47,15 @@ class MultiGPUTrainer(object):
         assert isinstance(model, Model)
         self.config = config
         self.model = model
-        self.opt = tf.train.AdamOptimizer(config.init_lr)
+        if config.optimizer == "Adam":
+            optimizer = tf.train.AdamOptimizer
+        elif config.optimizer == "SGD":
+            optimizer = tf.train.GradientDescentOptimizer
+        elif config.optimizer == "Adadelta":
+            optimizer = tf.train.AdadeltaOptimizer
+        else:
+            raise ValueError("Invalid value of optimizer: {}".format(config.optimizer))
+        self.opt = optimizer(config.init_lr)
         self.var_list = model.get_var_list()
         self.global_step = model.get_global_step()
         self.summary = model.summary

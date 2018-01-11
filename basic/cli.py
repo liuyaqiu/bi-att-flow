@@ -21,6 +21,7 @@ flags.DEFINE_string("shared_path", "", "Shared path []")
 flags.DEFINE_string("device", "/cpu:0", "default device for summing gradients. [/cpu:0]")
 flags.DEFINE_string("device_type", "gpu", "device for computing gradients (parallelization). cpu | gpu [gpu]")
 flags.DEFINE_integer("num_gpus", 1, "num of gpus or cpus for computing gradients [1]")
+flags.DEFINE_float("gpu_usage", 1.0, "gpu usage ratio")
 
 # Essential training and test options
 flags.DEFINE_string("mode", "test", "trains | test | forward [test]")
@@ -41,6 +42,7 @@ flags.DEFINE_integer("num_epochs", 12, "Total number of epochs for training [12]
 flags.DEFINE_integer("num_steps", 20000, "Number of steps [20000]")
 flags.DEFINE_integer("load_step", 0, "load step [0]")
 flags.DEFINE_float("init_lr", 0.001, "Initial learning rate [0.001]")
+flags.DEFINE_string("optimizer", "Adam", "Training Optimizer [Adam]")
 flags.DEFINE_float("input_keep_prob", 0.8, "Input keep prob for the dropout of LSTM weights [0.8]")
 flags.DEFINE_float("keep_prob", 0.8, "Keep prob for the dropout of Char-CNN weights [0.8]")
 flags.DEFINE_float("wd", 0.0, "L2 weight decay for regularization [0.0]")
