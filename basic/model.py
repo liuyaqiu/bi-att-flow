@@ -7,7 +7,7 @@ from tensorflow.contrib.rnn import BasicLSTMCell
 
 from basic.read_data import DataSet
 from my.tensorflow import get_initializer
-from my.tensorflow.nn import softsel, get_logits, highway_network, multi_conv1d
+from my.tensorflow.nn import softsel, get_logits, highway_network, multi_conv1d, sentence_embedding, gate
 from my.tensorflow.rnn import bidirectional_dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
@@ -188,6 +188,15 @@ class Model(object):
                 first_cell_bw = d_cell2_bw
                 second_cell_bw = d_cell3_bw
 
+            # sentence embedding gate
+            s_h = sentence_embedding(h)
+            s_h = tf.tile(tf.expand_dims(s_h, axis=-2), [1, 1, JX, 1])
+            s_u = sentence_embedding(u)
+            s_u = tf.tile(tf.expand_dims(tf.expand_dims(s_u, axis=-2), axis=-2), [1, M, JX, 1])
+            gate_0 = gate(p0, tf.concat(axis=3, values=[h, h * s_h, h * s_u])) # [N, M, JX, 8d]
+            p0 = p0 * gate_0
+            self.tensor_dict['s_h'] = s_h
+            self.tensor_dict['s_u'] = s_u
             (fw_g0, bw_g0), _ = bidirectional_dynamic_rnn(first_cell_fw, first_cell_bw, p0, x_len, dtype='float', scope='g0')  # [N, M, JX, 2d]
             g0 = tf.concat(axis=3, values=[fw_g0, bw_g0])
             (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(second_cell_fw, second_cell_bw, g0, x_len, dtype='float', scope='g1')  # [N, M, JX, 2d]

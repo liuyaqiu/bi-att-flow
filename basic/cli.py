@@ -102,9 +102,18 @@ flags.DEFINE_bool("q2c_att", True, "question-to-context attention? [True]")
 flags.DEFINE_bool("c2q_att", True, "context-to-question attention? [True]")
 flags.DEFINE_bool("dynamic_att", False, "Dynamic attention [False]")
 
+class Config():
+    def __init__(self, flags):
+        self.__dict__['__flags'] = flags.FLAGS.flag_values_dict()
+
+    def __getattr__(self, item):
+        return self.__dict__['__flags'][item]
+
+    def __setattr__(self, key, value):
+        self.__dict__['__flags'][key] = value
 
 def main(_):
-    config = flags.FLAGS
+    config = Config(flags)
 
     config.out_dir = os.path.join(config.out_base_dir, config.model_name, str(config.run_id).zfill(2))
 

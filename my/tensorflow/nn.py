@@ -1,4 +1,4 @@
-from tensorflow.python.ops.rnn_cell_impl import _linear
+from my.tensorflow.rnn_cell_impl import _linear
 from tensorflow.python.util import nest
 import tensorflow as tf
 
@@ -178,3 +178,33 @@ def multi_conv1d(in_, filter_sizes, heights, padding, is_train=None, keep_prob=1
             outs.append(out)
         concat_out = tf.concat(axis=2, values=outs)
         return concat_out
+
+def sentence_embedding(H, shared_params=True, scope=None):
+    if shared_params:
+        use = tf.AUTO_REUSE # !!! tf version >= 1.4
+    else:
+        use = None
+    with tf.variable_scope(scope or "sentence_embedding", reuse=use):
+        # dim = H.get_shape().as_list()
+        dim = tf.shape(H) # [N, M, JX, 2d]
+        d = H.get_shape().as_list()[-1]
+        w1 = tf.get_variable("w1", shape=[d, d], dtype='float')
+        w2 = tf.get_variable("w2", shape=[d, 1], dtype='float')
+        H_flat = flatten(H, 1)
+        tmp = tf.matmul(tf.tanh(tf.matmul(H_flat, w1)), w2) # [N * M * JX, 1]
+        ret = tf.reshape(tmp, shape=dim[:-1])
+        sf = tf.nn.softmax(ret)
+        out = tf.reduce_sum(tf.expand_dims(sf, -1) * H, axis=-2) # [N, M, 2d]
+        return out
+
+def gate(ref, input, scope=None):
+    with tf.variable_scope(scope or "gate"):
+        d1 = input.get_shape().as_list()[-1]
+        d2 = ref.get_shape().as_list()[-1]
+        w = tf.get_variable("w", shape=[d1, d2], dtype='float')
+        b = tf.get_variable("b", shape=[d2], dtype='float')
+        tmp = flatten(input, 1)
+        g = tf.sigmoid(tf.add(tf.matmul(tmp, w), b))
+        dim_ref = tf.shape(ref)
+        g = tf.reshape(g, shape=dim_ref)
+        return g

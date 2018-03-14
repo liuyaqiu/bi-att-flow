@@ -26,7 +26,7 @@ def main(config):
     if os.path.exists(os.path.join(config.log_dir, "config.json")):
         print("Loading config file.")
         with open(os.path.join(config.log_dir, "config.json"), 'r') as file:
-            config.update(**json.load(file))
+            config.__flags.update(**json.load(file))
     else:
         print("Saving config file.")
         with open(os.path.join(config.log_dir, "config.json"), 'w') as file:
@@ -46,6 +46,7 @@ def set_dirs(config):
     # create directories
     assert config.load or config.mode == 'train', "config.load must be True if not training"
     if not config.load and os.path.exists(config.out_dir):
+        print("Removing old files.")
         shutil.rmtree(config.out_dir)
 
     config.save_dir = os.path.join(config.out_dir, "save")
@@ -172,6 +173,9 @@ def _train(config):
                 graph_handler.dump_answer(e_dev)
     if global_step % config.save_period != 0:
         graph_handler.save(sess, global_step=global_step)
+
+    # close summary writer
+    graph_handler.writer.close()
 
 
 def _test(config):
